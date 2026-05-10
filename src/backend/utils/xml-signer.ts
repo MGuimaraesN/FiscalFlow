@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { SignedXml } from 'xml-crypto';
 
 export function signXml(xml: string, tagToSign: string, certPem: string, privateKeyPem: string): string {
-  const sig = new SignedXml();
+  const sig: any = new SignedXml();
   
   // Confguring the algorithms mapping for ICP-Brasil signature profiles
   sig.signatureAlgorithm = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
@@ -15,8 +15,8 @@ export function signXml(xml: string, tagToSign: string, certPem: string, private
 
   sig.signingKey = privateKeyPem;
   
-  function KeyInfoProvider() {
-    this.getKeyInfo = function(_key: any, _prefix: any) {
+  class KeyInfoProvider {
+    getKeyInfo(_key: any, _prefix: any) {
       // Return the X509 certificate string without headers
       const pureCert = certPem
         .replace(/-----BEGIN CERTIFICATE-----/, '')
@@ -25,10 +25,10 @@ export function signXml(xml: string, tagToSign: string, certPem: string, private
         .replace(/\\n/g, '');
 
       return `<X509Data><X509Certificate>${pureCert}</X509Certificate></X509Data>`;
-    };
+    }
   }
 
-  sig.keyInfoProvider = new (KeyInfoProvider as any)();
+  sig.keyInfoProvider = new KeyInfoProvider();
 
   sig.computeSignature(xml, {
     location: { reference: `//${tagToSign}`, action: 'append' } // appending Signature to the end of the tag

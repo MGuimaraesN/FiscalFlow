@@ -27,23 +27,20 @@ export async function consultarDistribuicao(
   if (!/^[0-9]{15}$/.test(formattedNSU)) throw new Error("ultNSU deve ter exatamente 15 dígitos");
 
   // Format the request XML
-  const distBody = `<distMDFe versao="3.00" xmlns="http://www.portalfiscal.inf.br/mdfe">
-  <tpAmb>${tpAmb}</tpAmb>
-  <verAplic>${verAplic}</verAplic>
-  <indDFe>${indDFe}</indDFe>
-  <indCompRet>${indCompRet}</indCompRet>
-  <ultNSU>${formattedNSU}</ultNSU>
-</distMDFe>`;
+  const distBody = `<distMDFe versao="3.00" xmlns="http://www.portalfiscal.inf.br/mdfe"><tpAmb>${tpAmb}</tpAmb><verAplic>${verAplic}</verAplic><indDFe>${indDFe}</indDFe><indCompRet>${indCompRet}</indCompRet><ultNSU>${formattedNSU}</ultNSU></distMDFe>`;
 
   const soapAction = 'http://www.portalfiscal.inf.br/mdfe/wsdl/MDFeDistribuicaoDFe/mdfeDistDFeInteresse';
   const soapXml = `<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-  <soap12:Header/>
+  <soap12:Header>
+    <mdfeCabecMsg xmlns="http://www.portalfiscal.inf.br/mdfe/wsdl/MDFeDistribuicaoDFe">
+      <cUF>${ufIbge}</cUF>
+      <versaoDados>3.00</versaoDados>
+    </mdfeCabecMsg>
+  </soap12:Header>
   <soap12:Body>
     <mdfeDistDFeInteresse xmlns="http://www.portalfiscal.inf.br/mdfe/wsdl/MDFeDistribuicaoDFe">
-      <mdfeDadosMsg>
-        ${distBody}
-      </mdfeDadosMsg>
+      <mdfeDadosMsg>${distBody}</mdfeDadosMsg>
     </mdfeDistDFeInteresse>
   </soap12:Body>
 </soap12:Envelope>`;
@@ -76,10 +73,16 @@ export async function consultarDistribuicao(
   }
   const methodResponse = body['mdfeDistDFeInteresseResponse'];
   const result = methodResponse ? methodResponse['mdfeDistDFeInteresseResult'] : null;
-  const retDistMDFe = result ? result['retDistMDFe'] : body['retDistMDFe'];
+  const retDistMDFe = result ? (result['retDistMDFe'] || result['retDistDFeInt']) : (body['retDistMDFe'] || body['retDistDFeInt']);
 
   if (!retDistMDFe) {
     throw new Error(`Unexpected structure: ${JSON.stringify(body)}`);
+  }
+
+  if (retDistMDFe.cStat === 243) {
+    throw new Error(`SEFAZ ERROR: 243 - XML Mal Formado. Verifique os schemas e a estrutura enviada.`);
+  } else if (retDistMDFe.cStat && ![137, 138].includes(Number(retDistMDFe.cStat))) {
+    console.log(`[SEFAZ INFO] Status Retornado: ${retDistMDFe.cStat} - ${retDistMDFe.xMotivo}`);
   }
 
   return retDistMDFe;

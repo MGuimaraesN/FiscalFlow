@@ -50,6 +50,7 @@ export async function enviarManifestacao(
 </evento>`;
 
   // Sign the event
+  if (!env.certPem || !env.privateKeyPem) throw new Error("Certificado pendente (PEM nulo)");
   const signedEvento = signXml(eventoXml, 'evento', env.certPem, env.privateKeyPem);
 
   const reqBody = `<?xml version="1.0" encoding="utf-8"?>
