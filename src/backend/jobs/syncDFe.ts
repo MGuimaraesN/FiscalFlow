@@ -80,7 +80,7 @@ export async function syncDFeForCompany(companyId: string) {
       } else if (cStat == 137) { // Nenhum documento localizado
          continueSync = false;
       } else {
-         throw new Error(`SEFAZ ERROR: \${cStat} - \${response.xMotivo}`);
+         throw new Error(`SEFAZ ERROR: ${cStat} - ${response.xMotivo}`);
       }
 
     } catch (error: any) {
