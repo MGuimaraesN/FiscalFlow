@@ -42,7 +42,7 @@ export async function syncDFeForCompany(companyId: string) {
         const maxNSU = String(response.maxNSU);
         ultNSU = String(response.ultNSU);
         
-        let docZips = response.loteDistDFeInt?.docZip;
+        let docZips = response.loteDistMDFe?.docZip;
         if (!docZips) {
            docZips = [];
         } else if (!Array.isArray(docZips)) {
@@ -56,16 +56,16 @@ export async function syncDFeForCompany(companyId: string) {
            
            const xml = await decodeDocZip(base64Content);
            
-           // We must extract chNFe. It's either inside resNFe or procNFe or resEvento
+           // We must extract chNFe / chMDFe. 
            let chNFe = '';
-           if (schema.startsWith('resNFe')) {
-               const parsedRes = xml.match(/<chNFe>(.*?)<\/chNFe>/);
+           if (schema.startsWith('resNFe') || schema.startsWith('resMDFe')) {
+               const parsedRes = xml.match(/<chNFe>(.*?)<\/chNFe>/) || xml.match(/<chMDFe>(.*?)<\/chMDFe>/);
                if (parsedRes) chNFe = parsedRes[1];
-           } else if (schema.startsWith('procNFe')) {
-               const parsedRes = xml.match(/Id="NFe(.*?)"/);
+           } else if (schema.startsWith('procNFe') || schema.startsWith('procMDFe')) {
+               const parsedRes = xml.match(/Id="(?:NFe|MDFe)(.*?)"/);
                if (parsedRes) chNFe = parsedRes[1];
            } else if (schema.startsWith('resEvento')) {
-               const parsedRes = xml.match(/<chNFe>(.*?)<\/chNFe>/);
+               const parsedRes = xml.match(/<chNFe>(.*?)<\/chNFe>/) || xml.match(/<chMDFe>(.*?)<\/chMDFe>/);
                if (parsedRes) chNFe = parsedRes[1];
            }
 
