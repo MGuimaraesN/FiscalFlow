@@ -28,6 +28,8 @@ model Company {
   ie           String?
   uf           String
   environment  String   @default("HOMOLOGACAO") // HOMOLOGACAO ou PRODUCAO
+  syncIntervalHours Int   @default(4)
+  lastAutoSync DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   userId       String

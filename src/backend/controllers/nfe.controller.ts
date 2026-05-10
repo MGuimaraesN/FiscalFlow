@@ -23,11 +23,21 @@ export async function getDocuments(req: AuthRequest, res: Response): Promise<voi
   if (serie) where.serie = String(serie);
 
   if (search) {
-    where.OR = [
-      { chNFe: { contains: String(search) } },
-      { supplier: { name: { contains: String(search) } } },
-      { supplier: { cnpj: { contains: String(search) } } }
-    ];
+    const cleanSearch = String(search).trim();
+    const digitsOnly = cleanSearch.replace(/\\D/g, '');
+
+    if (digitsOnly.length === 44) {
+      where.chNFe = digitsOnly;
+    } else if (digitsOnly.length === 14) {
+      where.supplier = { cnpj: digitsOnly };
+    } else if (digitsOnly.length > 0 && cleanSearch === digitsOnly) {
+       where.OR = [
+         { chNFe: { contains: digitsOnly } },
+         { supplier: { cnpj: { contains: digitsOnly } } }
+       ];
+    } else {
+      where.supplier = { name: { contains: cleanSearch } };
+    }
   }
 
   let orderBy: any = { issueDate: 'desc' };
@@ -58,7 +68,7 @@ export async function getDocuments(req: AuthRequest, res: Response): Promise<voi
 }
 
 export async function getEvents(req: AuthRequest, res: Response): Promise<void> {
-  const { documentId } = req.params;
+  const documentId = req.params.documentId as string;
   try {
     const doc = await prisma.nFeDocument.findFirst({
       where: { id: documentId, company: { userId: req.user!.userId } },
@@ -101,7 +111,7 @@ export async function dashboardStats(req: AuthRequest, res: Response): Promise<v
 }
 
 export async function manifestDocument(req: AuthRequest, res: Response): Promise<void> {
-  const { documentId } = req.params;
+  const documentId = req.params.documentId as string;
   const { tpEvento, xJust } = req.body;
 
   if (!['210210', '210200', '210240', '210220'].includes(tpEvento)) {
@@ -112,11 +122,20 @@ export async function manifestDocument(req: AuthRequest, res: Response): Promise
   try {
     const doc = await prisma.nFeDocument.findFirst({
       where: { id: documentId, company: { userId: req.user!.userId } },
-      include: { company: { include: { certificate: true } } }
+      include: { company: true }
     });
 
-    if (!doc || !doc.company.certificate) {
-      res.status(404).json({ error: 'Documento ou certificado nao encontrado' });
+    if (!doc) {
+      res.status(404).json({ error: 'Documento nao encontrado' });
+      return;
+    }
+
+    const certificate = await prisma.certificate.findFirst({
+      where: { companyId: doc.companyId }
+    });
+
+    if (!certificate) {
+      res.status(404).json({ error: 'Certificado nao encontrado para a empresa' });
       return;
     }
 
@@ -124,8 +143,8 @@ export async function manifestDocument(req: AuthRequest, res: Response): Promise
     const nSeqEvento = eventsCount + 1;
 
     const certData = extractFromPfx(
-      doc.company.certificate.certBase64,
-      decryptString(doc.company.certificate.password)
+      certificate.certBase64,
+      decryptString(certificate.password)
     );
 
     const env = {

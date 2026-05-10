@@ -61,6 +61,15 @@ export default function Companies() {
       }
   });
 
+  const updateCompany = useMutation({
+    mutationFn: async (data: { companyId: string, syncIntervalHours: number }) => {
+      await api.put(`/companies/${data.companyId}`, { syncIntervalHours: data.syncIntervalHours });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+    }
+  });
+
   if (isLoading) return <div>Carregando empresas...</div>;
 
   return (
@@ -104,6 +113,24 @@ export default function Companies() {
                   <p>UF: <span className="text-slate-300">{comp.uf}</span></p>
                   <p>Ambiente: <span className={comp.environment === 'PRODUCAO' ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'}>{comp.environment}</span></p>
                   <p>Total NFe: <span className="text-slate-300 font-bold">{comp._count?.documents || 0}</span></p>
+                  
+                  <div className="flex items-center gap-2 pt-1 pb-1">
+                    <p>Auto Sync:</p>
+                    <select 
+                      value={comp.syncIntervalHours}
+                      onChange={(e) => updateCompany.mutate({ companyId: comp.id, syncIntervalHours: Number(e.target.value) })}
+                      disabled={updateCompany.isPending}
+                      className="bg-slate-800 text-xs text-white border border-slate-700 rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-emerald-500"
+                    >
+                       <option value={0}>Nenhum</option>
+                       <option value={1}>1h</option>
+                       <option value={2}>2h</option>
+                       <option value={4}>4h</option>
+                       <option value={8}>8h</option>
+                       <option value={12}>12h</option>
+                       <option value={24}>24h</option>
+                    </select>
+                  </div>
                   {comp.syncLogs && comp.syncLogs.length > 0 && (
                       <div className="mt-3 p-2 bg-[#020617] rounded border border-slate-800">
                         <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Última Sincronização</p>

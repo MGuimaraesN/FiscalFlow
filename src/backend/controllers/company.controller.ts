@@ -31,7 +31,7 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
 }
 
 export async function uploadCertificate(req: AuthRequest, res: Response): Promise<void> {
-  const { companyId } = req.params;
+  const companyId = req.params.companyId as string;
   const { password } = req.body;
 
   if (!req.file || !password) {
@@ -112,10 +112,38 @@ export async function listCompanies(req: AuthRequest, res: Response): Promise<vo
   }
 }
 
-export async function syncCompany(req: AuthRequest, res: Response): Promise<void> {
+export async function updateCompany(req: AuthRequest, res: Response): Promise<void> {
+  const companyId = req.params.companyId as string;
+  const { syncIntervalHours } = req.body;
+
   try {
     const company = await prisma.company.findFirst({
-        where: { id: req.params.companyId, userId: req.user!.userId }
+        where: { id: companyId, userId: req.user!.userId }
+    });
+    if (!company) {
+       res.status(404).json({ error: 'Empresa não encontrada' });
+       return;
+    }
+
+    const updated = await prisma.company.update({
+        where: { id: companyId },
+        data: {
+          syncIntervalHours: syncIntervalHours !== undefined ? Number(syncIntervalHours) : undefined
+        }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Update company error:', error);
+    res.status(500).json({ error: 'Erro ao atualizar Empresa' });
+  }
+}
+
+export async function syncCompany(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const companyId = req.params.companyId as string;
+    const company = await prisma.company.findFirst({
+        where: { id: companyId, userId: req.user!.userId }
     });
     if (!company) {
        res.status(404).json({ error: 'Empresa não encontrada' });

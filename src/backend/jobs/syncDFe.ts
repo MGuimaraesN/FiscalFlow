@@ -33,6 +33,11 @@ export async function syncDFeForCompany(companyId: string) {
       const response = await consultarDistribuicao(company.cnpj, '91', ultNSU, env); // 91 for Ambiente Nacional
       
       const cStat = response.cStat;
+      
+      if (!cStat) {
+          throw new Error(`SEFAZ ERROR: Resposta inesperada - ${JSON.stringify(response)}`);
+      }
+
       if (cStat == 138) { // Documento localizado
         const maxNSU = String(response.maxNSU);
         ultNSU = String(response.ultNSU);
@@ -78,6 +83,14 @@ export async function syncDFeForCompany(companyId: string) {
         }
 
       } else if (cStat == 137) { // Nenhum documento localizado
+         await prisma.syncLog.create({
+             data: { companyId: company.id, ultNSU, status: 'SUCCESS' }
+         });
+         continueSync = false;
+      } else if (cStat == 656) { // Consumo indevido
+         await prisma.syncLog.create({
+             data: { companyId: company.id, ultNSU, status: 'ERROR', errorMessage: 'Rejeição: Consumo indevido. O SEFAZ bloqueou temporariamente as consultas. Aguarde 1 hora.' }
+         });
          continueSync = false;
       } else {
          throw new Error(`SEFAZ ERROR: ${cStat} - ${response.xMotivo}`);
@@ -95,7 +108,18 @@ export async function syncDFeForCompany(companyId: string) {
 
 export async function runAllSyncs() {
     const companies = await prisma.company.findMany();
+    const now = new Date();
     for (const company of companies) {
+        if (company.lastAutoSync && company.syncIntervalHours > 0) {
+            const hoursSinceLastSync = (now.getTime() - company.lastAutoSync.getTime()) / (1000 * 60 * 60);
+            if (hoursSinceLastSync < company.syncIntervalHours) {
+                continue;
+            }
+        }
         await syncDFeForCompany(company.id);
+        await prisma.company.update({
+            where: { id: company.id },
+            data: { lastAutoSync: new Date() }
+        });
     }
 }

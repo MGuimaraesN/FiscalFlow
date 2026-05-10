@@ -42,11 +42,21 @@ export async function consultarDistribuicao(
   const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
   const parsed = parser.parse(responseXml);
   
-  const envelope = parsed['soap:Envelope'] || parsed['env:Envelope'] || parsed['soap12:Envelope'];
+  const envelope = parsed['soap:Envelope'] || parsed['env:Envelope'] || parsed['soap12:Envelope'] || parsed['env:Envelope'];
+  if (!envelope) {
+    throw new Error(`Invalid SOAP Response: ${responseXml}`);
+  }
   const body = envelope['soap:Body'] || envelope['env:Body'] || envelope['soap12:Body'];
+  if (body['soap12:Fault'] || body['soap:Fault'] || body['env:Fault']) {
+    throw new Error(`SOAP Fault: ${JSON.stringify(body)}`);
+  }
   const methodResponse = body['nfeDistDFeInteresseResponse'];
-  const result = methodResponse['nfeDistDFeInteresseResult'];
-  const retDistDFeInt = result['retDistDFeInt'];
+  const result = methodResponse ? methodResponse['nfeDistDFeInteresseResult'] : null;
+  const retDistDFeInt = result ? result['retDistDFeInt'] : body['retDistDFeInt'];
+
+  if (!retDistDFeInt) {
+    throw new Error(`Unexpected structure: ${JSON.stringify(body)}`);
+  }
 
   return retDistDFeInt;
 }
