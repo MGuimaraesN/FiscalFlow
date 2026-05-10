@@ -26,24 +26,20 @@ export async function consultarDistribuicao(
   if (indCompRet !== '0' && indCompRet !== '1') throw new Error("indCompRet deve ser 0 ou 1");
   if (!/^[0-9]{15}$/.test(formattedNSU)) throw new Error("ultNSU deve ter exatamente 15 dígitos");
 
-  // Format the request XML
+  // A documentação pede CNPJ ou CPF para identificar o interessado em DF-e em todos os outros DF-es. 
+  // No caso de distribuição de MDFe NT 01/2025, vamos tentar enviar sem o header do SOAP (que causava erro)
+  // e certificar que a estrutura XML do node principal atende o schema de Sefaz.
   const distBody = `<distMDFe versao="3.00" xmlns="http://www.portalfiscal.inf.br/mdfe"><tpAmb>${tpAmb}</tpAmb><verAplic>${verAplic}</verAplic><indDFe>${indDFe}</indDFe><indCompRet>${indCompRet}</indCompRet><ultNSU>${formattedNSU}</ultNSU></distMDFe>`;
 
   const soapAction = 'http://www.portalfiscal.inf.br/mdfe/wsdl/MDFeDistribuicaoDFe/mdfeDistDFeInteresse';
   const soapXml = `<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-  <soap12:Header>
-    <mdfeCabecMsg xmlns="http://www.portalfiscal.inf.br/mdfe/wsdl/MDFeDistribuicaoDFe">
-      <cUF>${ufIbge}</cUF>
-      <versaoDados>3.00</versaoDados>
-    </mdfeCabecMsg>
-  </soap12:Header>
-  <soap12:Body>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <soap:Body>
     <mdfeDistDFeInteresse xmlns="http://www.portalfiscal.inf.br/mdfe/wsdl/MDFeDistribuicaoDFe">
       <mdfeDadosMsg>${distBody}</mdfeDadosMsg>
     </mdfeDistDFeInteresse>
-  </soap12:Body>
-</soap12:Envelope>`;
+  </soap:Body>
+</soap:Envelope>`;
 
   if (process.env.DEBUG_SEFAZ_XML === 'true') {
      console.log(`[SEFAZ DEBUG] Ambiente: ${env.environment}, URL: ${url}, Service: MDFeDistribuicaoDFe`);
