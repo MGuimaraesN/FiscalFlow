@@ -125,9 +125,9 @@ export async function syncDFeForCompany(companyId: string) {
              data: { companyId: company.id, ultNSU, status: 'SUCCESS' }
          });
          continueSync = false;
-      } else if (String(cStat) === '656') { // Consumo indevido
+      } else if (String(cStat) === '656' || String(cStat) === '678') { // Consumo indevido
          await prisma.syncLog.create({
-             data: { companyId: company.id, ultNSU, status: 'ERROR', errorMessage: 'Rejeição: Consumo indevido. O SEFAZ bloqueou temporariamente as consultas. Aguarde 1 hora.' }
+             data: { companyId: company.id, ultNSU, status: 'ERROR', errorMessage: 'Rejeição: Consumo indevido. O SEFAZ bloqueou temporariamente as consultas. Aguarde.' }
          });
          continueSync = false;
       } else {

@@ -14,8 +14,11 @@ export async function consultarDistribuicao(
 ): Promise<any> {
   const url = env.environment === 'PRODUCAO' ? DIST_URL_PRODUCAO : DIST_URL_HOMOLOGACAO;
   const tpAmb = env.environment === 'PRODUCAO' ? '1' : '2';
-  const cleanCnpj = cnpj.replace(/\D/g, '');
-  const nsu = String(ultNSU || '0').padStart(15, '0');
+  const cleanCnpj = String(cnpj || '').replace(/\D/g, '');
+  if (cleanCnpj.length !== 14) {
+    throw new Error(`CNPJ inválido para MDFeDistribuicaoDFe: ${cleanCnpj}`);
+  }
+  const nsu = String(ultNSU || '0').replace(/\D/g, '').padStart(15, '0');
 
   const distBody = `<distDFeInt versao="1.00" xmlns="http://www.portalfiscal.inf.br/mdfe">
   <tpAmb>${tpAmb}</tpAmb>
