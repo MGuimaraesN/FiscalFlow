@@ -14,22 +14,16 @@ export async function consultarDistribuicao(
 ): Promise<any> {
   const url = env.environment === 'PRODUCAO' ? DIST_URL_PRODUCAO : DIST_URL_HOMOLOGACAO;
   const tpAmb = env.environment === 'PRODUCAO' ? '1' : '2';
-  const verAplic = 'FiscalFlow';
-  const indDFe = '9';
-  const indCompRet = '0';
-  const formattedNSU = ultNSU.padStart(15, '0');
+  const cleanCnpj = cnpj.replace(/\D/g, '');
+  const nsu = String(ultNSU || '0').padStart(15, '0');
 
-  // Input Validation before sending!
-  if (tpAmb !== '1' && tpAmb !== '2') throw new Error("tpAmb deve ser 1 ou 2");
-  if (verAplic.length < 1 || verAplic.length > 20) throw new Error("verAplic deve ter de 1 a 20 caracteres");
-  if (!['0', '1', '2', '3', '8', '9'].includes(indDFe)) throw new Error("indDFe deve ser 0, 1, 2, 3, 8 ou 9");
-  if (indCompRet !== '0' && indCompRet !== '1') throw new Error("indCompRet deve ser 0 ou 1");
-  if (!/^[0-9]{15}$/.test(formattedNSU)) throw new Error("ultNSU deve ter exatamente 15 dígitos");
-
-  // A documentação pede CNPJ ou CPF para identificar o interessado em DF-e em todos os outros DF-es. 
-  // No caso de distribuição de MDFe NT 01/2025, vamos tentar enviar sem o header do SOAP (que causava erro)
-  // e certificar que a estrutura XML do node principal atende o schema de Sefaz.
-  const distBody = `<distMDFe versao="3.00" xmlns="http://www.portalfiscal.inf.br/mdfe"><tpAmb>${tpAmb}</tpAmb><verAplic>${verAplic}</verAplic><indDFe>${indDFe}</indDFe><indCompRet>${indCompRet}</indCompRet><ultNSU>${formattedNSU}</ultNSU></distMDFe>`;
+  const distBody = `<distDFeInt versao="1.00" xmlns="http://www.portalfiscal.inf.br/mdfe">
+  <tpAmb>${tpAmb}</tpAmb>
+  <CNPJ>${cleanCnpj}</CNPJ>
+  <distNSU>
+    <ultNSU>${nsu}</ultNSU>
+  </distNSU>
+</distDFeInt>`;
 
   const soapAction = 'http://www.portalfiscal.inf.br/mdfe/wsdl/MDFeDistribuicaoDFe/mdfeDistDFeInteresse';
   const soapXml = `<?xml version="1.0" encoding="utf-8"?>
@@ -68,18 +62,18 @@ export async function consultarDistribuicao(
     throw new Error(`SOAP Fault: ${JSON.stringify(body)}`);
   }
   const methodResponse = body['mdfeDistDFeInteresseResponse'];
-  const result = methodResponse ? methodResponse['mdfeDistDFeInteresseResult'] : null;
-  const retDistMDFe = result ? (result['retDistMDFe'] || result['retDistDFeInt']) : (body['retDistMDFe'] || body['retDistDFeInt']);
+  const result = methodResponse ? methodResponse['mdfeDistDFeInteresseResult'] : body['mdfeDistDFeInteresseResult'] || body['retDistDFeInt'];
+  const retDistDFeInt = result ? (result['retDistDFeInt'] || result) : body['retDistDFeInt'];
 
-  if (!retDistMDFe) {
+  if (!retDistDFeInt || !retDistDFeInt.cStat) {
     throw new Error(`Unexpected structure: ${JSON.stringify(body)}`);
   }
 
-  if (String(retDistMDFe.cStat) === '243') {
-    throw new Error(`SEFAZ ERROR: 243 - XML Mal Formado. Verifique os schemas e a estrutura enviada.`);
-  } else if (retDistMDFe.cStat && !['137', '138'].includes(String(retDistMDFe.cStat))) {
-    console.log(`[SEFAZ INFO] Status Retornado: ${retDistMDFe.cStat} - ${retDistMDFe.xMotivo}`);
+  if (String(retDistDFeInt.cStat) === '243') {
+    throw new Error(`SEFAZ rejeitou XML: 243 - ${retDistDFeInt.xMotivo}`);
+  } else if (retDistDFeInt.cStat && !['137', '138'].includes(String(retDistDFeInt.cStat))) {
+    console.log(`[SEFAZ INFO] Status Retornado: ${retDistDFeInt.cStat} - ${retDistDFeInt.xMotivo}`);
   }
 
-  return retDistMDFe;
+  return retDistDFeInt;
 }

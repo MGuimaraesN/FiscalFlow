@@ -61,39 +61,29 @@ export async function syncDFeForCompany(companyId: string) {
       }
 
       if (String(cStat) === '138') { // Documento localizado
-        const novoUltNSU = String(response.ultNSU || ultNSU).padStart(15, '0');
+        const previousUltNSU = String(ultNSU).padStart(15, '0');
+        const novoUltNSU = String(response.ultNSU ?? ultNSU).padStart(15, '0');
+        const maxNSU = String(response.maxNSU ?? novoUltNSU).padStart(15, '0');
         
-        let docs: any[] = [];
-
-        // Tratar loteDistMDFeComp
-        if (response.loteDistMDFeComp) {
-           try {
-             const unzipped = await decodeDocZip(response.loteDistMDFeComp);
-             const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
-             const parsedLote = parser.parse(unzipped);
-             if (parsedLote?.loteDistMDFe?.proc) {
-                 const compDocs = Array.isArray(parsedLote.loteDistMDFe.proc) ? parsedLote.loteDistMDFe.proc : [parsedLote.loteDistMDFe.proc];
-                 docs.push(...compDocs);
-             }
-           } catch (e: any) {
-             console.error('Falha ao descompactar ou parsear loteDistMDFeComp:', e.message);
-           }
-        }
-
-        // Tratar loteDistMDFe.proc
-        let proc = response.loteDistMDFe?.proc;
-        if (proc) {
-           if (!Array.isArray(proc)) proc = [proc];
-           docs.push(...proc);
-        }
+        let docs = response.loteDistDFeInt?.docZip;
+        if (!docs) docs = [];
+        if (!Array.isArray(docs)) docs = [docs];
 
         for (const doc of docs) {
            const schema = doc['@_schema'] || '';
            const nsu = doc['@_NSU'] || '';
-           
-           const xml = extractXmlFromProc(doc);
-           if (!xml) {
-             console.warn(`[SEFAZ INFO] Falha ao extrair XML do proc NSU ${nsu}`);
+           const base64Content = doc['#text'];
+
+           if (!base64Content) {
+             console.warn(`[SEFAZ INFO] docZip sem conteúdo base64 NSU ${nsu}`);
+             continue;
+           }
+
+           let xml = '';
+           try {
+             xml = await decodeDocZip(base64Content);
+           } catch (e: any) {
+             console.warn(`[SEFAZ INFO] Falha ao extrair XML do docZip NSU ${nsu}`);
              continue;
            }
            
@@ -119,13 +109,15 @@ export async function syncDFeForCompany(companyId: string) {
         }
         
         await prisma.syncLog.create({
-            data: { companyId: company.id, ultNSU: novoUltNSU, maxNSU: novoUltNSU, status: 'SUCCESS' } // Salvando maxNSU como ultNSU atual pq o Prisma espera algo.
+            data: { companyId: company.id, ultNSU: novoUltNSU, maxNSU: maxNSU, status: 'SUCCESS' }
         });
 
-        if (novoUltNSU === String(ultNSU).padStart(15, '0')) {
-          continueSync = false;
-        } else {
+        if (novoUltNSU !== previousUltNSU) {
           ultNSU = novoUltNSU;
+        }
+
+        if (novoUltNSU === previousUltNSU || ultNSU === maxNSU) {
+          continueSync = false;
         }
 
       } else if (String(cStat) === '137') { // Nenhum documento localizado
