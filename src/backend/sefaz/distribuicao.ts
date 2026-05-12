@@ -59,7 +59,7 @@ export async function consultarDistribuicao(
   const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
   const parsed = parser.parse(responseXml);
   
-  const envelope = parsed['soap:Envelope'] || parsed['env:Envelope'] || parsed['soap12:Envelope'] || parsed['env:Envelope'];
+  const envelope = parsed['soap:Envelope'] || parsed['env:Envelope'] || parsed['soap12:Envelope'];
   if (!envelope) {
     throw new Error(`Invalid SOAP Response: ${responseXml}`);
   }
@@ -75,9 +75,9 @@ export async function consultarDistribuicao(
     throw new Error(`Unexpected structure: ${JSON.stringify(body)}`);
   }
 
-  if (retDistMDFe.cStat === 243) {
+  if (String(retDistMDFe.cStat) === '243') {
     throw new Error(`SEFAZ ERROR: 243 - XML Mal Formado. Verifique os schemas e a estrutura enviada.`);
-  } else if (retDistMDFe.cStat && ![137, 138].includes(Number(retDistMDFe.cStat))) {
+  } else if (retDistMDFe.cStat && !['137', '138'].includes(String(retDistMDFe.cStat))) {
     console.log(`[SEFAZ INFO] Status Retornado: ${retDistMDFe.cStat} - ${retDistMDFe.xMotivo}`);
   }
 

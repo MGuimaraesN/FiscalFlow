@@ -21,8 +21,8 @@ export function signXml(xml: string, tagToSign: string, certPem: string, private
       const pureCert = certPem
         .replace(/-----BEGIN CERTIFICATE-----/, '')
         .replace(/-----END CERTIFICATE-----/, '')
-        .replace(/\\r\\n/g, '')
-        .replace(/\\n/g, '');
+        .replace(/\r\n/g, '')
+        .replace(/\n/g, '');
 
       return `<X509Data><X509Certificate>${pureCert}</X509Certificate></X509Data>`;
     }

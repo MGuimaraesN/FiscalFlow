@@ -4,6 +4,28 @@ import { extractFromPfx } from '../utils/cert.ts';
 import { decryptString } from '../utils/crypto.ts';
 import { decodeDocZip } from '../utils/parser.ts';
 import { processXmlAndSave } from '../services/nfe.service.ts';
+import { XMLBuilder, XMLParser } from 'fast-xml-parser';
+
+function extractXmlFromProc(proc: any): string | null {
+  const clone = { ...proc };
+
+  delete clone['@_schema'];
+  delete clone['@_NSU'];
+
+  const keys = Object.keys(clone).filter((key) => key !== '#text');
+
+  if (keys.length === 0) {
+    return null;
+  }
+
+  const builder = new XMLBuilder({
+    ignoreAttributes: false,
+    attributeNamePrefix: '@_',
+    format: false,
+  });
+
+  return builder.build(clone);
+}
 
 export async function syncDFeForCompany(companyId: string) {
   const company = await prisma.company.findUnique({
@@ -38,34 +60,56 @@ export async function syncDFeForCompany(companyId: string) {
           throw new Error(`SEFAZ ERROR: Resposta inesperada - ${JSON.stringify(response)}`);
       }
 
-      if (cStat == 138) { // Documento localizado
-        const maxNSU = String(response.maxNSU);
-        ultNSU = String(response.ultNSU);
+      if (String(cStat) === '138') { // Documento localizado
+        const novoUltNSU = String(response.ultNSU || ultNSU).padStart(15, '0');
         
-        let docZips = response.loteDistMDFe?.docZip;
-        if (!docZips) {
-           docZips = [];
-        } else if (!Array.isArray(docZips)) {
-           docZips = [docZips];
+        let docs: any[] = [];
+
+        // Tratar loteDistMDFeComp
+        if (response.loteDistMDFeComp) {
+           try {
+             const unzipped = await decodeDocZip(response.loteDistMDFeComp);
+             const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
+             const parsedLote = parser.parse(unzipped);
+             if (parsedLote?.loteDistMDFe?.proc) {
+                 const compDocs = Array.isArray(parsedLote.loteDistMDFe.proc) ? parsedLote.loteDistMDFe.proc : [parsedLote.loteDistMDFe.proc];
+                 docs.push(...compDocs);
+             }
+           } catch (e: any) {
+             console.error('Falha ao descompactar ou parsear loteDistMDFeComp:', e.message);
+           }
         }
 
-        for (const doc of docZips) {
-           const schema = doc['@_schema'];
-           const nsu = doc['@_NSU'];
-           const base64Content = doc['#text'];
+        // Tratar loteDistMDFe.proc
+        let proc = response.loteDistMDFe?.proc;
+        if (proc) {
+           if (!Array.isArray(proc)) proc = [proc];
+           docs.push(...proc);
+        }
+
+        for (const doc of docs) {
+           const schema = doc['@_schema'] || '';
+           const nsu = doc['@_NSU'] || '';
            
-           const xml = await decodeDocZip(base64Content);
+           const xml = extractXmlFromProc(doc);
+           if (!xml) {
+             console.warn(`[SEFAZ INFO] Falha ao extrair XML do proc NSU ${nsu}`);
+             continue;
+           }
            
            // We must extract chNFe / chMDFe. 
            let chNFe = '';
-           if (schema.startsWith('resNFe') || schema.startsWith('resMDFe')) {
-               const parsedRes = xml.match(/<chNFe>(.*?)<\/chNFe>/) || xml.match(/<chMDFe>(.*?)<\/chMDFe>/);
+           if (schema.startsWith('resMDFe') || schema.startsWith('resNFe')) {
+               const parsedRes = xml.match(/<chMDFe>(.*?)<\/chMDFe>/) || xml.match(/<chNFe>(.*?)<\/chNFe>/);
                if (parsedRes) chNFe = parsedRes[1];
-           } else if (schema.startsWith('procNFe') || schema.startsWith('procMDFe')) {
-               const parsedRes = xml.match(/Id="(?:NFe|MDFe)(.*?)"/);
+           } else if (schema.startsWith('procMDFe') || schema.startsWith('procNFe')) {
+               const parsedRes = xml.match(/Id="(?:MDFe|NFe)(.*?)"/);
                if (parsedRes) chNFe = parsedRes[1];
            } else if (schema.startsWith('resEvento')) {
-               const parsedRes = xml.match(/<chNFe>(.*?)<\/chNFe>/) || xml.match(/<chMDFe>(.*?)<\/chMDFe>/);
+               const parsedRes = xml.match(/<chMDFe>(.*?)<\/chMDFe>/) || xml.match(/<chNFe>(.*?)<\/chNFe>/);
+               if (parsedRes) chNFe = parsedRes[1];
+           } else if (schema.startsWith('procEventoMDFe')) {
+               const parsedRes = xml.match(/<chMDFe>(.*?)<\/chMDFe>/);
                if (parsedRes) chNFe = parsedRes[1];
            }
 
@@ -75,19 +119,21 @@ export async function syncDFeForCompany(companyId: string) {
         }
         
         await prisma.syncLog.create({
-            data: { companyId: company.id, ultNSU, maxNSU, status: 'SUCCESS' }
+            data: { companyId: company.id, ultNSU: novoUltNSU, maxNSU: novoUltNSU, status: 'SUCCESS' } // Salvando maxNSU como ultNSU atual pq o Prisma espera algo.
         });
 
-        if (ultNSU === maxNSU) {
-            continueSync = false;
+        if (novoUltNSU === String(ultNSU).padStart(15, '0')) {
+          continueSync = false;
+        } else {
+          ultNSU = novoUltNSU;
         }
 
-      } else if (cStat == 137) { // Nenhum documento localizado
+      } else if (String(cStat) === '137') { // Nenhum documento localizado
          await prisma.syncLog.create({
              data: { companyId: company.id, ultNSU, status: 'SUCCESS' }
          });
          continueSync = false;
-      } else if (cStat == 656) { // Consumo indevido
+      } else if (String(cStat) === '656') { // Consumo indevido
          await prisma.syncLog.create({
              data: { companyId: company.id, ultNSU, status: 'ERROR', errorMessage: 'Rejeição: Consumo indevido. O SEFAZ bloqueou temporariamente as consultas. Aguarde 1 hora.' }
          });

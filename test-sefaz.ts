@@ -22,7 +22,7 @@ async function testSefaz() {
   ];
 
   const cnpj = company.cnpj.replace(/\D/g, '');
-  const distBody = `<distMDFe versao="3.00" xmlns="http://www.portalfiscal.inf.br/mdfe"><tpAmb>2</tpAmb><verAplic>FiscalFlow</verAplic><CNPJ>${cnpj}</CNPJ><indDFe>9</indDFe><indCompRet>0</indCompRet><ultNSU>000000000000000</ultNSU></distMDFe>`;
+  const distBody = `<distMDFe versao="3.00" xmlns="http://www.portalfiscal.inf.br/mdfe"><tpAmb>2</tpAmb><verAplic>FiscalFlow</verAplic><indDFe>9</indDFe><indCompRet>0</indCompRet><ultNSU>000000000000000</ultNSU></distMDFe>`;
   
   const soapXml = `<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
