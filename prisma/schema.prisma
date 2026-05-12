@@ -1,0 +1,117 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("USER")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companies Company[]
+}
+
+model Company {
+  id           String   @id @default(uuid())
+  cnpj         String   @unique
+  name         String
+  ie           String?
+  uf           String
+  environment  String   @default("HOMOLOGACAO") // HOMOLOGACAO ou PRODUCAO
+  syncIntervalHours Int   @default(4)
+  syncNFe      Boolean  @default(true)
+  syncCTe      Boolean  @default(false)
+  syncMDFe     Boolean  @default(false)
+  syncMonth    String?  // Legacy field unused by the app. Kept to avoid unnecessary DB migration.
+  lastAutoSync DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  userId       String
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  certificate  Certificate?
+  documents    NFeDocument[]
+  syncLogs     SyncLog[]
+}
+
+model Certificate {
+  id         String   @id @default(uuid())
+  companyId  String   @unique
+  certBase64 String   @map("certificate_base64") // Simplified storage for the certificate
+  password   String   @map("certificate_password") // Encrypted
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  cnpj      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents NFeDocument[]
+}
+
+model NFeDocument {
+  id            String   @id @default(uuid())
+  companyId     String
+  supplierId    String?
+  chNFe         String   @unique
+  nNSU          String?
+  schema        String?
+  xml           String?  // The downloaded XML
+  protNFe       String?
+  status        String   @default("PENDING") // PENDING, MANIFESTED, EXECUTED, DOWNLOADED, ERROR
+  valueTotal    Float?
+  issueDate     DateTime?
+  nNF           String?
+  serie         String?
+  manifestStatus String? // SCIENCE, CONFIRM, DENY, NOT_DONE
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supplier      Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  events        NFeEvent[]
+}
+
+model NFeEvent {
+  id            String   @id @default(uuid())
+  documentId    String
+  tpEvento      String
+  descEvento    String
+  nSeqEvento    String
+  dhEvento      DateTime
+  xml           String?
+  createdAt     DateTime @default(now())
+
+  nfeDocument   NFeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model SyncLog {
+  id            String   @id @default(uuid())
+  companyId     String
+  dfeType       String   @default("NFE") // NFE, CTE, MDFE
+  environment   String?  // HOMOLOGACAO or PRODUCAO. Keeps NSU cursors separated by environment.
+  ultNSU        String
+  maxNSU        String?
+  status        String   // SUCCESS, ERROR
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
