@@ -130,6 +130,21 @@ export async function manifestDocument(req: AuthRequest, res: Response): Promise
       return;
     }
 
+    const chaveNumerica = String(doc.chNFe || '').replace(/\D/g, '');
+    const modeloDocumento = chaveNumerica.substring(20, 22);
+    if (modeloDocumento !== '55') {
+      res.status(400).json({
+        error: `Manifestação do destinatário é permitida somente para NF-e modelo 55. Este documento é modelo ${modeloDocumento || 'desconhecido'}${modeloDocumento === '58' ? ' (MDF-e)' : ''}.`
+      });
+      return;
+    }
+
+    const eventosPermitidos = ['210200', '210210', '210220', '210240'];
+    if (!eventosPermitidos.includes(String(tpEvento))) {
+      res.status(400).json({ error: `Evento NF-e inválido para manifestação: ${tpEvento}` });
+      return;
+    }
+
     const certificate = await prisma.certificate.findFirst({
       where: { companyId: doc.companyId }
     });
@@ -185,7 +200,7 @@ export async function manifestDocument(req: AuthRequest, res: Response): Promise
       });
       res.json({ message: 'Manifestacao enviada com sucesso' });
     } else {
-      res.status(400).json({ error: `SEFAZ: \${retEvento.infEvento.xMotivo}` });
+      res.status(400).json({ error: `SEFAZ: ${retEvento.infEvento.xMotivo}` });
     }
 
   } catch (error: any) {

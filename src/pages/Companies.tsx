@@ -7,7 +7,7 @@ import { differenceInDays, isPast } from 'date-fns';
 export default function Companies() {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ cnpj: '', name: '', uf: '', ie: '', environment: 'HOMOLOGACAO' });
+  const [formData, setFormData] = useState({ cnpj: '', name: '', uf: '', ie: '', environment: 'HOMOLOGACAO', syncNFe: true, syncCTe: false, syncMDFe: false });
   const [certData, setCertData] = useState<{ companyId: string, password: string, file: File | null } | null>(null);
   const [certError, setCertError] = useState('');
   const [syncingCompany, setSyncingCompany] = useState<string | null>(null);
@@ -25,6 +25,7 @@ export default function Companies() {
     onSuccess: () => {
        queryClient.invalidateQueries({ queryKey: ['companies'] });
        setShowModal(false);
+       setFormData({ cnpj: '', name: '', uf: '', ie: '', environment: 'HOMOLOGACAO', syncNFe: true, syncCTe: false, syncMDFe: false });
     }
   });
 
@@ -62,8 +63,9 @@ export default function Companies() {
   });
 
   const updateCompany = useMutation({
-    mutationFn: async (data: { companyId: string, syncIntervalHours: number }) => {
-      await api.put(`/companies/${data.companyId}`, { syncIntervalHours: data.syncIntervalHours });
+    mutationFn: async (data: { companyId: string, syncIntervalHours?: number, syncNFe?: boolean, syncCTe?: boolean, syncMDFe?: boolean }) => {
+      const { companyId, ...payload } = data;
+      await api.put(`/companies/${companyId}`, payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
@@ -112,7 +114,7 @@ export default function Companies() {
                 <div className="space-y-1 mt-4 text-xs font-medium text-slate-500">
                   <p>UF: <span className="text-slate-300">{comp.uf}</span></p>
                   <p>Ambiente: <span className={comp.environment === 'PRODUCAO' ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'}>{comp.environment}</span></p>
-                  <p>Total NFe: <span className="text-slate-300 font-bold">{comp._count?.documents || 0}</span></p>
+                  <p>Total DF-e: <span className="text-slate-300 font-bold">{comp._count?.documents || 0}</span></p>
                   
                   <div className="flex items-center gap-2 pt-1 pb-1">
                     <p>Auto Sync:</p>
@@ -131,12 +133,48 @@ export default function Companies() {
                        <option value={24}>24h</option>
                     </select>
                   </div>
+                  <div className="pt-2">
+                    <p className="mb-1">Tipos para puxar:</p>
+                    <div className="flex flex-wrap gap-2">
+                      <label className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-300 uppercase font-bold tracking-wider">
+                        <input
+                          type="checkbox"
+                          checked={comp.syncNFe !== false}
+                          disabled={updateCompany.isPending}
+                          onChange={(e) => updateCompany.mutate({ companyId: comp.id, syncNFe: e.target.checked })}
+                          className="accent-emerald-500"
+                        />
+                        NF-e
+                      </label>
+                      <label className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-300 uppercase font-bold tracking-wider">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(comp.syncCTe)}
+                          disabled={updateCompany.isPending}
+                          onChange={(e) => updateCompany.mutate({ companyId: comp.id, syncCTe: e.target.checked })}
+                          className="accent-emerald-500"
+                        />
+                        CT-e
+                      </label>
+                      <label className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-300 uppercase font-bold tracking-wider">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(comp.syncMDFe)}
+                          disabled={updateCompany.isPending}
+                          onChange={(e) => updateCompany.mutate({ companyId: comp.id, syncMDFe: e.target.checked })}
+                          className="accent-emerald-500"
+                        />
+                        MDF-e
+                      </label>
+                    </div>
+                  </div>
                   {comp.syncLogs && comp.syncLogs.length > 0 && (
                       <div className="mt-3 p-2 bg-[#020617] rounded border border-slate-800">
                         <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Última Sincronização</p>
                         <p className={`font-bold flex items-center gap-1.5 ${comp.syncLogs[0].status === 'SUCCESS' ? 'text-emerald-400' : 'text-rose-400'}`}>
                            <span className={`w-1.5 h-1.5 rounded-full ${comp.syncLogs[0].status === 'SUCCESS' ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-                           {comp.syncLogs[0].status === 'SUCCESS' ? 'Sucesso' : 'Erro'} 
+                           {comp.syncLogs[0].status === 'SUCCESS' ? 'Sucesso' : 'Erro'}
+                           {comp.syncLogs[0].dfeType && <span className="text-slate-500 font-normal ml-1">({comp.syncLogs[0].dfeType})</span>}
                            <span className="text-slate-500 font-normal ml-1">
                              em {new Date(comp.syncLogs[0].createdAt).toLocaleString()}
                            </span>
@@ -243,6 +281,20 @@ export default function Companies() {
                   <option value="HOMOLOGACAO">Homologação</option>
                   <option value="PRODUCAO">Produção</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Tipos de DF-e para puxar</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <label className="flex items-center justify-center gap-2 bg-[#020617] border border-slate-800 rounded-md p-2 text-xs text-slate-300 font-bold">
+                    <input type="checkbox" className="accent-emerald-500" checked={formData.syncNFe} onChange={e => setFormData({...formData, syncNFe: e.target.checked})} /> NF-e
+                  </label>
+                  <label className="flex items-center justify-center gap-2 bg-[#020617] border border-slate-800 rounded-md p-2 text-xs text-slate-300 font-bold">
+                    <input type="checkbox" className="accent-emerald-500" checked={formData.syncCTe} onChange={e => setFormData({...formData, syncCTe: e.target.checked})} /> CT-e
+                  </label>
+                  <label className="flex items-center justify-center gap-2 bg-[#020617] border border-slate-800 rounded-md p-2 text-xs text-slate-300 font-bold">
+                    <input type="checkbox" className="accent-emerald-500" checked={formData.syncMDFe} onChange={e => setFormData({...formData, syncMDFe: e.target.checked})} /> MDF-e
+                  </label>
+                </div>
               </div>
               <div className="flex justify-end gap-3 mt-8">
                 <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white rounded transition">Cancelar</button>

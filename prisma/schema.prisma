@@ -29,6 +29,10 @@ model Company {
   uf           String
   environment  String   @default("HOMOLOGACAO") // HOMOLOGACAO ou PRODUCAO
   syncIntervalHours Int   @default(4)
+  syncNFe      Boolean  @default(true)
+  syncCTe      Boolean  @default(false)
+  syncMDFe     Boolean  @default(false)
+  syncMonth    String?  // Legacy field unused by the app. Kept to avoid unnecessary DB migration.
   lastAutoSync DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -101,6 +105,8 @@ model NFeEvent {
 model SyncLog {
   id            String   @id @default(uuid())
   companyId     String
+  dfeType       String   @default("NFE") // NFE, CTE, MDFE
+  environment   String?  // HOMOLOGACAO or PRODUCAO. Keeps NSU cursors separated by environment.
   ultNSU        String
   maxNSU        String?
   status        String   // SUCCESS, ERROR

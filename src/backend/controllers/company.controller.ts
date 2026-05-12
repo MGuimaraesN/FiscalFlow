@@ -7,7 +7,7 @@ import forge from 'node-forge';
 import { syncDFeForCompany } from '../jobs/syncDFe.ts';
 
 export async function createCompany(req: AuthRequest, res: Response): Promise<void> {
-  const { cnpj, name, ie, uf, environment } = req.body;
+  const { cnpj, name, ie, uf, environment, syncNFe, syncCTe, syncMDFe } = req.body;
   if (!cnpj || !name || !uf) {
     res.status(400).json({ error: 'Campos requeridos ausentes' });
     return;
@@ -16,11 +16,14 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
   try {
     const company = await prisma.company.create({
       data: {
-        cnpj: cnpj.replace(/\\D/g, ''),
+        cnpj: cnpj.replace(/\D/g, ''),
         name,
         ie,
         uf,
         environment: environment || 'HOMOLOGACAO',
+        syncNFe: syncNFe !== undefined ? Boolean(syncNFe) : true,
+        syncCTe: syncCTe !== undefined ? Boolean(syncCTe) : false,
+        syncMDFe: syncMDFe !== undefined ? Boolean(syncMDFe) : false,
         userId: req.user!.userId,
       }
     });
@@ -97,7 +100,7 @@ export async function listCompanies(req: AuthRequest, res: Response): Promise<vo
           select: { id: true, expiresAt: true, updatedAt: true }
         },
         syncLogs: {
-          select: { status: true, createdAt: true, errorMessage: true },
+          select: { status: true, dfeType: true, environment: true, createdAt: true, errorMessage: true },
           orderBy: { createdAt: 'desc' },
           take: 1
         },
@@ -114,7 +117,7 @@ export async function listCompanies(req: AuthRequest, res: Response): Promise<vo
 
 export async function updateCompany(req: AuthRequest, res: Response): Promise<void> {
   const companyId = req.params.companyId as string;
-  const { syncIntervalHours } = req.body;
+  const { syncIntervalHours, syncNFe, syncCTe, syncMDFe } = req.body;
 
   try {
     const company = await prisma.company.findFirst({
@@ -128,7 +131,10 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
     const updated = await prisma.company.update({
         where: { id: companyId },
         data: {
-          syncIntervalHours: syncIntervalHours !== undefined ? Number(syncIntervalHours) : undefined
+          syncIntervalHours: syncIntervalHours !== undefined ? Number(syncIntervalHours) : undefined,
+          syncNFe: syncNFe !== undefined ? Boolean(syncNFe) : undefined,
+          syncCTe: syncCTe !== undefined ? Boolean(syncCTe) : undefined,
+          syncMDFe: syncMDFe !== undefined ? Boolean(syncMDFe) : undefined,
         }
     });
 
