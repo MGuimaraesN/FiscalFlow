@@ -95,9 +95,9 @@ export async function dashboardStats(req: AuthRequest, res: Response): Promise<v
     });
 
     const totalCount = docs.length;
-    const totalValue = docs.reduce((acc, curr) => acc + (curr.valueTotal || 0), 0);
-    const manifestsDone = docs.filter(d => ['MANIFESTED', 'DOWNLOADED'].includes(d.status)).length;
-    const pendingManifests = docs.filter(d => d.status === 'PENDING').length;
+    const totalValue = docs.reduce((acc: number, curr: any) => acc + (curr.valueTotal || 0), 0);
+    const manifestsDone = docs.filter((d: any) => ['MANIFESTED', 'DOWNLOADED'].includes(d.status)).length;
+    const pendingManifests = docs.filter((d: any) => d.status === 'PENDING').length;
 
     res.json({
       totalCount,

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api.ts';
-import { Terminal, Calendar, Filter } from 'lucide-react';
+import { Terminal, Calendar, Filter, X } from 'lucide-react';
 
 export default function AdminLogs() {
   const [page, setPage] = useState(1);
   const [filterCompany, setFilterCompany] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedLog, setSelectedLog] = useState<any>(null);
 
   const { data: companiesData } = useQuery({
     queryKey: ['admin-companies'],
@@ -110,7 +111,11 @@ export default function AdminLogs() {
                   <tr><td colSpan={4} className="px-6 py-12 text-center text-slate-500 font-sans">Nenhum log encontrado para os filtros selecionados.</td></tr>
                 ) : (
                   logsData?.data?.map((log: any) => (
-                    <tr key={log.id} className="border-b border-slate-800/50 hover:bg-slate-800 transition">
+                    <tr 
+                      key={log.id} 
+                      className="border-b border-slate-800/50 hover:bg-slate-800 transition cursor-pointer"
+                      onClick={() => setSelectedLog(log)}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap text-slate-400">{new Date(log.createdAt).toLocaleString('pt-BR')}</td>
                       <td className="px-6 py-4 whitespace-nowrap font-sans">
                          <p className="font-bold text-white max-w-[200px] truncate">{log.company.name}</p>
@@ -122,7 +127,7 @@ export default function AdminLogs() {
                          </span>
                       </td>
                       <td className="px-6 py-4">
-                         <div className={`p-2 rounded-lg text-[11px] ${log.status === 'ERROR' ? 'bg-rose-500/5 text-rose-400 border border-rose-500/10 whitespace-pre-wrap' : 'text-slate-500'}`}>
+                         <div className={`p-2 rounded-lg text-[11px] truncate max-w-sm ${log.status === 'ERROR' ? 'bg-rose-500/5 text-rose-400 border border-rose-500/10' : 'text-slate-500'}`}>
                              {log.errorMessage || 'Sincronização concluída com sucesso'}
                          </div>
                       </td>
@@ -158,6 +163,41 @@ export default function AdminLogs() {
           </div>
         )}
       </div>
+
+      {selectedLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl">
+             <div className="flex items-center justify-between p-4 border-b border-slate-800">
+                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                   Detalhes do Log
+                 </h2>
+                 <button onClick={() => setSelectedLog(null)} className="text-slate-500 hover:text-white transition p-1">
+                    <X size={20} />
+                 </button>
+             </div>
+             <div className="p-4 overflow-y-auto flex-1 font-mono text-sm text-slate-300">
+                 <div className="mb-4 space-y-2 text-xs">
+                    <p><span className="text-slate-500">Empresa:</span> {selectedLog.company?.name} <span className="text-slate-500 ml-1">({selectedLog.company?.cnpj})</span></p>
+                    <p><span className="text-slate-500">Data/Hora:</span> {new Date(selectedLog.createdAt).toLocaleString('pt-BR')}</p>
+                    <p><span className="text-slate-500">Status:</span> <span className={`font-bold ${selectedLog.status === 'ERROR' ? 'text-rose-400' : 'text-emerald-400'}`}>{selectedLog.status}</span></p>
+                 </div>
+                 <div className={`bg-[#020617] p-4 rounded-lg border overflow-x-auto ${selectedLog.status === 'ERROR' ? 'border-rose-500/20 text-rose-400' : 'border-slate-800 text-slate-300'}`}>
+                   <pre className="whitespace-pre-wrap break-words text-xs">
+                      {selectedLog.errorMessage ? (
+                        (() => {
+                           try {
+                             return JSON.stringify(JSON.parse(selectedLog.errorMessage), null, 2);
+                           } catch {
+                             return selectedLog.errorMessage;
+                           }
+                        })()
+                      ) : 'Sincronização concluída com sucesso'}
+                   </pre>
+                 </div>
+             </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
