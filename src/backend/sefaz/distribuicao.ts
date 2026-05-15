@@ -105,7 +105,7 @@ function getBodyPayload(config: DistribuicaoConfig, distBody: string): string {
 
 export async function consultarDistribuicao(
   cnpj: string,
-  uf: string,
+  uf: string | null | undefined,
   ultNSU: string,
   env: SefazEnv,
   dfeType: DFeType = 'NFE'
@@ -113,20 +113,20 @@ export async function consultarDistribuicao(
   const config = CONFIGS[dfeType];
   const url = env.environment === 'PRODUCAO' ? config.urlProducao : config.urlHomologacao;
   const tpAmb = env.environment === 'PRODUCAO' ? '1' : '2';
-  const cUFAutor = resolveCUF(uf || env.uf);
-  const headerCUF = config.fixedHeaderCUF || cUFAutor;
+  const cUFAutor = uf ? resolveCUF(uf) : null;
+  const headerCUF = config.fixedHeaderCUF || (cUFAutor || resolveCUF(env.uf));
   const cleanCnpj = onlyDigits(cnpj);
 
   if (cleanCnpj.length !== 14) {
     throw new Error(`CNPJ inválido para ${config.serviceName}: ${cleanCnpj}`);
   }
 
-  if (!/^\d{2}$/.test(cUFAutor)) {
-    throw new Error(`UF/cUFAutor inválido para ${config.serviceName}: ${cUFAutor}`);
+  if (!/^\d{2}$/.test(headerCUF)) {
+    throw new Error(`UF/cUFAutor inválido para o header de ${config.serviceName}: ${headerCUF}`);
   }
 
   const nsu = normalizeNSU(ultNSU);
-  const cUFAutorXml = config.useCUFAutor ? `<cUFAutor>${cUFAutor}</cUFAutor>` : '';
+  const cUFAutorXml = config.useCUFAutor && cUFAutor ? `<cUFAutor>${cUFAutor}</cUFAutor>` : '';
   const distBody = `<distDFeInt versao="${config.version}" xmlns="${config.documentNamespace}"><tpAmb>${tpAmb}</tpAmb>${cUFAutorXml}<CNPJ>${cleanCnpj}</CNPJ><distNSU><ultNSU>${nsu}</ultNSU></distNSU></distDFeInt>`;
   const bodyPayload = getBodyPayload(config, distBody);
 
@@ -134,7 +134,7 @@ export async function consultarDistribuicao(
   const soapXml = `<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Header><${config.headerTag} xmlns="${config.wsdlNamespace}"><cUF>${headerCUF}</cUF><versaoDados>${config.version}</versaoDados></${config.headerTag}></soap12:Header><soap12:Body>${bodyPayload}</soap12:Body></soap12:Envelope>`;
 
   if (process.env.DEBUG_SEFAZ_XML === 'true') {
-     console.log(`[SEFAZ DEBUG] Ambiente: ${env.environment}, URL: ${url}, Service: ${config.serviceName}`);
+     console.log(`[SEFAZ DEBUG] Ambiente: ${env.environment}, URL: ${url}, Service: ${config.serviceName} distNSU`);
      const logDir = path.resolve(process.cwd(), 'logs');
      if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
      fs.writeFileSync(path.join(logDir, `sefaz-${config.logPrefix}-distribuicao-request.xml`), soapXml, 'utf-8');
@@ -147,6 +147,53 @@ export async function consultarDistribuicao(
      fs.writeFileSync(path.join(logDir, `sefaz-${config.logPrefix}-distribuicao-response.xml`), responseXml, 'utf-8');
   }
 
+  return parseDistribuicaoResponse(responseXml, config);
+}
+
+export async function consultarNFePorChave(
+  cnpj: string,
+  chNFe: string,
+  env: SefazEnv
+): Promise<any> {
+  const config = CONFIGS['NFE'];
+  const url = env.environment === 'PRODUCAO' ? config.urlProducao : config.urlHomologacao;
+  const tpAmb = env.environment === 'PRODUCAO' ? '1' : '2';
+  const cleanCnpj = onlyDigits(cnpj);
+  const headerCUF = resolveCUF(env.uf);
+
+  if (cleanCnpj.length !== 14) {
+    throw new Error(`CNPJ inválido para consultarNFePorChave: ${cleanCnpj}`);
+  }
+
+  if (!chNFe || chNFe.length !== 44) {
+    throw new Error(`Chave NF-e inválida: ${chNFe}`);
+  }
+
+  // Not sending cUFAutor by default for consChNFe
+  const distBody = `<distDFeInt versao="${config.version}" xmlns="${config.documentNamespace}"><tpAmb>${tpAmb}</tpAmb><CNPJ>${cleanCnpj}</CNPJ><consChNFe><chNFe>${chNFe}</chNFe></consChNFe></distDFeInt>`;
+  const bodyPayload = getBodyPayload(config, distBody);
+
+  const soapAction = `${config.wsdlNamespace}/${config.operationTag}`;
+  const soapXml = `<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Header><${config.headerTag} xmlns="${config.wsdlNamespace}"><cUF>${headerCUF}</cUF><versaoDados>${config.version}</versaoDados></${config.headerTag}></soap12:Header><soap12:Body>${bodyPayload}</soap12:Body></soap12:Envelope>`;
+
+  if (process.env.DEBUG_SEFAZ_XML === 'true') {
+     console.log(`[SEFAZ DEBUG] Ambiente: ${env.environment}, URL: ${url}, Service: ${config.serviceName} consChNFe`);
+     const logDir = path.resolve(process.cwd(), 'logs');
+     if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+     fs.writeFileSync(path.join(logDir, `sefaz-${config.logPrefix}-consch-request.xml`), soapXml, 'utf-8');
+  }
+
+  const responseXml = await sendSoapRequest(url, soapAction, soapXml, env);
+
+  if (process.env.DEBUG_SEFAZ_XML === 'true') {
+     const logDir = path.resolve(process.cwd(), 'logs');
+     fs.writeFileSync(path.join(logDir, `sefaz-${config.logPrefix}-consch-response.xml`), responseXml, 'utf-8');
+  }
+
+  return parseDistribuicaoResponse(responseXml, config);
+}
+
+function parseDistribuicaoResponse(responseXml: string, config: DistribuicaoConfig): any {
   const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
   const parsed = parser.parse(responseXml);
 
@@ -184,7 +231,7 @@ export async function consultarDistribuicao(
   }
 
   if (String(retDistDFeInt.cStat) === '243') {
-    throw new Error(`SEFAZ rejeitou XML: 243 - ${retDistDFeInt.xMotivo}. Verifique logs/sefaz-${config.logPrefix}-distribuicao-request.xml`);
+    throw new Error(`SEFAZ rejeitou XML: 243 - ${retDistDFeInt.xMotivo}. Verifique logs/sefaz-${config.logPrefix}-*-request.xml`);
   } else if (retDistDFeInt.cStat && !['137', '138'].includes(String(retDistDFeInt.cStat))) {
     console.log(`[SEFAZ INFO] ${config.serviceName} Status Retornado: ${retDistDFeInt.cStat} - ${retDistDFeInt.xMotivo}`);
   }

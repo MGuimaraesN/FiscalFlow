@@ -14,12 +14,29 @@ export default function NFeList() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCompany, setFilterCompany] = useState('');
   const [filterSerie, setFilterSerie] = useState('');
+  const [debouncedSerie, setDebouncedSerie] = useState('');
   const [filterNNF, setFilterNNF] = useState('');
+  const [debouncedNNF, setDebouncedNNF] = useState('');
   const [sortBy, setSortBy] = useState('issueDate');
   const [sortOrder, setSortOrder] = useState('desc');
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [eventsModalDoc, setEventsModalDoc] = useState<any>(null);
   const [eventsList, setEventsList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const tSearch = setTimeout(() => setDebouncedSearch(search), 500);
+    return () => clearTimeout(tSearch);
+  }, [search]);
+
+  useEffect(() => {
+    const tNNF = setTimeout(() => setDebouncedNNF(filterNNF), 500);
+    return () => clearTimeout(tNNF);
+  }, [filterNNF]);
+
+  useEffect(() => {
+    const tSerie = setTimeout(() => setDebouncedSerie(filterSerie), 500);
+    return () => clearTimeout(tSerie);
+  }, [filterSerie]);
 
   const { data: companies } = useQuery({
     queryKey: ['companies'],
@@ -32,11 +49,20 @@ export default function NFeList() {
   const handleSearch = (e: any) => {
       setSearch(e.target.value);
       setPage(1);
-      setTimeout(() => setDebouncedSearch(e.target.value), 500);
+  };
+
+  const handleFilterNNF = (e: any) => {
+      setFilterNNF(e.target.value);
+      setPage(1);
+  };
+
+  const handleFilterSerie = (e: any) => {
+      setFilterSerie(e.target.value);
+      setPage(1);
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ['nfe', debouncedSearch, page, startDate, endDate, filterStatus, sortBy, sortOrder, filterNNF, filterSerie, filterCompany],
+    queryKey: ['nfe', debouncedSearch, page, startDate, endDate, filterStatus, sortBy, sortOrder, debouncedNNF, debouncedSerie, filterCompany],
     queryFn: async () => {
       const qs = new URLSearchParams({ 
           search: debouncedSearch, 
@@ -48,8 +74,8 @@ export default function NFeList() {
       if (startDate) qs.append('startDate', startDate);
       if (endDate) qs.append('endDate', endDate);
       if (filterStatus) qs.append('status', filterStatus);
-      if (filterNNF) qs.append('nNF', filterNNF);
-      if (filterSerie) qs.append('serie', filterSerie);
+      if (debouncedNNF) qs.append('nNF', debouncedNNF);
+      if (debouncedSerie) qs.append('serie', debouncedSerie);
       if (filterCompany) qs.append('companyId', filterCompany);
 
       const res = await api.get(`/nfe?${qs.toString()}`);
@@ -169,7 +195,7 @@ export default function NFeList() {
                 placeholder="Série" 
                 className="w-full xl:w-20 px-3 py-1.5 bg-[#020617] border border-slate-800 rounded-md outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-slate-200"
                 value={filterSerie}
-                onChange={e => {setFilterSerie(e.target.value); setPage(1);}}
+                onChange={handleFilterSerie}
             />
 
             <input 
@@ -177,7 +203,7 @@ export default function NFeList() {
                 placeholder="Número NF" 
                 className="w-full xl:w-28 px-3 py-1.5 bg-[#020617] border border-slate-800 rounded-md outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-slate-200"
                 value={filterNNF}
-                onChange={e => {setFilterNNF(e.target.value); setPage(1);}}
+                onChange={handleFilterNNF}
             />
           </div>
 

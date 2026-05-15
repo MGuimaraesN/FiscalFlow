@@ -57,11 +57,25 @@ model Certificate {
 }
 
 model Supplier {
-  id        String   @id @default(uuid())
-  cnpj      String   @unique
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  String   @id @default(uuid())
+  cnpj                String   @unique
+  name                String
+  tradeName           String?
+  ie                  String?
+  email               String?
+  phone               String?
+  uf                  String?
+  city                String?
+  cep                 String?
+  address             String?
+  number              String?
+  complement          String?
+  neighborhood        String?
+  mainActivity        String?
+  registrationStatus  String?
+  cnpjDataUpdatedAt   DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   documents NFeDocument[]
 }

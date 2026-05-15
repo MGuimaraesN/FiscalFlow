@@ -10,6 +10,7 @@ import Register from './pages/Register.tsx';
 import Dashboard from './pages/Dashboard.tsx';
 import Companies from './pages/Companies.tsx';
 import NFeList from './pages/NFeList.tsx';
+import Suppliers from './pages/Suppliers.tsx';
 import AdminLogs from './pages/AdminLogs.tsx';
 import Layout from './components/Layout.tsx';
 
@@ -26,6 +27,7 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/companies" element={<Companies />} />
             <Route path="/nfe" element={<NFeList />} />
+            <Route path="/suppliers" element={<Suppliers />} />
             <Route path="/admin/logs" element={<AdminLogs />} />
             <Route path="/" element={<Navigate to="/dashboard" />} />
           </Route>

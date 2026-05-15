@@ -67,6 +67,10 @@ export default function Layout() {
             <Building size={20} />
             <span className="text-sm font-medium">Empresas</span>
           </Link>
+          <Link to="/suppliers" className={linkClass('/suppliers')} onClick={closeMenu}>
+            <Building size={20} />
+            <span className="text-sm font-medium">Fornecedores</span>
+          </Link>
           {user?.role === 'SUPERADMIN' && (
             <Link to="/admin/logs" className={linkClass('/admin/logs')} onClick={closeMenu}>
               <Terminal size={20} />

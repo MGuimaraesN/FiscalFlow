@@ -1,5 +1,5 @@
 import { prisma } from '../prisma.ts';
-import { consultarDistribuicao, DFeType } from '../sefaz/distribuicao.ts';
+import { consultarDistribuicao, consultarNFePorChave, DFeType } from '../sefaz/distribuicao.ts';
 import { extractFromPfx } from '../utils/cert.ts';
 import { decryptString } from '../utils/crypto.ts';
 import { decodeDocZip } from '../utils/parser.ts';
@@ -144,7 +144,7 @@ async function syncDFeTypeForCompany(company: any, env: any, dfeType: DFeType) {
     requestCount += 1;
 
     try {
-      const response = await consultarDistribuicao(company.cnpj, company.uf, ultNSU, env, dfeType);
+      const response = await consultarDistribuicao(company.cnpj, null, ultNSU, env, dfeType);
       const cStat = String(response.cStat ?? '');
 
       if (!cStat) {
@@ -291,6 +291,38 @@ export async function syncDFeForCompany(companyId: string) {
 
   for (const dfeType of enabledTypes) {
     await syncDFeTypeForCompany(company, env, dfeType);
+  }
+
+  // Fetch full XML for NFe documents that were manifested but not yet fully downloaded
+  const pendingDocs = await prisma.nFeDocument.findMany({
+    where: {
+      companyId: company.id,
+      schema: { startsWith: 'resNFe' },
+      status: 'MANIFESTED',
+      manifestStatus: { in: ['CONFIRM', 'SCIENCE'] }
+    }
+  });
+
+  for (const doc of pendingDocs) {
+    try {
+      const chResponse = await consultarNFePorChave(company.cnpj, doc.chNFe, env);
+      if (String(chResponse.cStat) === '138') {
+        let docs = chResponse.loteDistDFeInt?.docZip;
+        if (!docs) docs = [];
+        if (!Array.isArray(docs)) docs = [docs];
+
+        for (const d of docs) {
+          const schema = d['@_schema'] || '';
+          const base64Content = d['#text'];
+          if (base64Content && schema.startsWith('procNFe')) {
+             const xml = await decodeDocZip(base64Content);
+             await processXmlAndSave(xml, company.id, doc.chNFe, schema, d['@_NSU'] || doc.nNSU || '');
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn(`Erro ao tentar baixar XML pendente da chave ${doc.chNFe}:`, e.message);
+    }
   }
 }
 

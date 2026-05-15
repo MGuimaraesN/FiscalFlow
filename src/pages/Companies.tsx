@@ -96,18 +96,37 @@ export default function Companies() {
                     <p className="text-sm font-mono text-slate-400 mt-1">{comp.cnpj}</p>
                   </div>
                   {comp.certificate && (
-                     <button 
-                        disabled={syncingCompany === comp.id}
-                        onClick={() => syncMutation.mutate(comp.id)}
-                        className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 sm:py-1.5 rounded-lg border border-slate-700 uppercase font-bold tracking-wider transition disabled:opacity-50 flex items-center justify-center gap-2 w-full sm:w-auto"
-                     >
-                        {syncingCompany === comp.id ? (
-                          <>
-                            <span className="w-2 h-2 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
-                            Sincronizando...
-                          </>
-                        ) : 'Sincronizar Lote'}
-                     </button>
+                    <div className="flex gap-2">
+                       <button 
+                          disabled={syncingCompany === comp.id}
+                          onClick={async () => {
+                             if (confirm('Tem certeza que deseja resetar o NSU desta empresa? A próxima sincronização recomeçará do zero (últimos 90 dias).')) {
+                                try {
+                                   await api.post(`/companies/${comp.id}/sync/reset`, { dfeType: 'NFE', environment: comp.environment });
+                                   alert('NSU resetado com sucesso.');
+                                   queryClient.invalidateQueries({ queryKey: ['companies'] });
+                                } catch (e: any) {
+                                   alert('Erro ao resetar NSU: ' + e.message);
+                                }
+                             }
+                          }}
+                          className="text-[10px] bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 px-3 py-2 sm:py-1.5 rounded-lg border border-rose-500/20 uppercase font-bold tracking-wider transition disabled:opacity-50 flex items-center justify-center w-full sm:w-auto"
+                       >
+                          Resetar NSU
+                       </button>
+                       <button 
+                          disabled={syncingCompany === comp.id}
+                          onClick={() => syncMutation.mutate(comp.id)}
+                          className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 sm:py-1.5 rounded-lg border border-slate-700 uppercase font-bold tracking-wider transition disabled:opacity-50 flex items-center justify-center gap-2 w-full sm:w-auto"
+                       >
+                          {syncingCompany === comp.id ? (
+                            <>
+                              <span className="w-2 h-2 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
+                              Sincronizando...
+                            </>
+                          ) : 'Sincronizar Lote'}
+                       </button>
+                    </div>
                   )}
                 </div>
                 
@@ -261,7 +280,31 @@ export default function Companies() {
             <form onSubmit={e => { e.preventDefault(); createCompany.mutate(formData); }} className="space-y-4">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">CNPJ</label>
-                <input required className="w-full bg-[#020617] border border-slate-800 rounded-md p-2 text-white focus:ring-2 focus:ring-emerald-500 outline-none" value={formData.cnpj} onChange={e => setFormData({...formData, cnpj: e.target.value})} />
+                <div className="flex gap-2">
+                  <input required className="w-full bg-[#020617] border border-slate-800 rounded-md p-2 text-white focus:ring-2 focus:ring-emerald-500 outline-none" value={formData.cnpj} onChange={e => setFormData({...formData, cnpj: e.target.value})} />
+                  <button 
+                    type="button" 
+                    onClick={async () => {
+                      if (!formData.cnpj) return;
+                      try {
+                        const res = await api.get(`/cnpj/${formData.cnpj.replace(/\D/g, '')}`);
+                        if (res.data) {
+                          setFormData(prev => ({
+                            ...prev,
+                            name: res.data.razaoSocial || prev.name,
+                            uf: res.data.uf || prev.uf,
+                            ie: res.data.inscricaoEstadual || prev.ie
+                          }));
+                        }
+                      } catch (err: any) {
+                        alert('Erro ao buscar CNPJ: ' + (err.response?.data?.error || err.message));
+                      }
+                    }}
+                    className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-md text-xs font-bold transition"
+                  >
+                    Buscar
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Razão Social</label>
